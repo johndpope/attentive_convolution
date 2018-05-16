@@ -99,6 +99,13 @@ def main(_):
   for element in result:
     print type(element)
     print element
-
+'''
+output one sample predict result every step:
+{'probabilities': array([0.1806186 , 0.25701535, 0.562366  ], dtype=float32), 'logits': array([-0.77392685, -0.42117864,  0.36183846], dtype=float32), 'classes': array([2])}
+<type 'dict'>
+{'probabilities': array([0.38314635, 0.38385567, 0.23299803], dtype=float32), 'logits': array([-0.19423525, -0.19238569, -0.69162226], dtype=float32), 'classes': array([1])}
+<type 'dict'>
+{'probabilities': array([0.52416   , 0.3336452 , 0.14219485], dtype=float32), 'logits': array([ 0.2221566 , -0.22956233, -1.0824422 ], dtype=float32), 'classes': array([0])}
+'''
 if __name__ == "__main__":
         tf.app.run(main)
