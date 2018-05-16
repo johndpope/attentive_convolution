@@ -2,10 +2,11 @@ import tensorflow as tf
 import numpy as np
 #from tensorflow.contrib.data import Dataset, TextLineDataset
 import os
-import chardet
-from sklearn.feature_extraction.text import CountVectorizer
+#import chardet
+#from sklearn.feature_extraction.text import CountVectorizer
 import string
 import gensim
+import pickle
 
 class SubDataSet(object):
     """docstring for Dataset"""
@@ -16,6 +17,7 @@ class SubDataSet(object):
     def get_train_input(self):
         dataset = tf.data.TextLineDataset(self.hparam.train_file).map(self.tokenize)
         dataset = dataset.repeat() \
+            .shuffle(buffer_size=self.hparam.buffer_size) \
             .padded_batch(
                 self.hparam.batch_size,
                 padded_shapes=([None], [None], [None], [None], [None]))
@@ -134,8 +136,10 @@ class SubDataSet(object):
     def generate_vocab(self):
         self.vocab_map = self.preprocess_files(max_f = 0.1, min_f = 5)
         self.vocab_len = len(self.vocab_map)
+        self.save_voc2pickle()
 
     def preprocess_files(self, max_f=1.0, min_f=1):
+        print 'preprocess_files'
         vocab_map = {}
         filelist = []
         self.listdir(self.path, filelist)
@@ -143,6 +147,7 @@ class SubDataSet(object):
         vocab_len_dic = {}
         wholeword = 0
         for file in filelist:
+            print file
             fi = open(file)
             for line in fi:
                 line = line.strip().lower().split()
@@ -195,25 +200,75 @@ class SubDataSet(object):
             vocab_map[key] = id
             id += 1
 
-        vocab_map['_UNK'] = 0
+        vocab_map['<PAD>'] = 0
+        vocab_map['_UNK'] = id
         print 'vocab len: ', len(vocab_map)
         return vocab_map
 
+    def save_voc2pickle(self):
+        print 'save voc dict', self.hparam.voc
+        if os.path.exists(self.hparam.voc):
+            print 'del ', self.hparam.voc
+            os.remove(self.hparam.voc)
+
+        pickle_out = open(self.hparam.voc,"wb")
+        pickle.dump(self.vocab_map, pickle_out)
+        pickle_out.close()
+
+    def load_voc_pickle(self):
+        pickle_in = open(self.hparam.voc,"rb")
+        self.vocab_map = pickle.load(pickle_in)
+        self.vocab_len = len(self.vocab_map)
+        pickle_in.close()
+        print 'load vocab sucess'
+
+    def save_emb_pickle(self):
+        if os.path.exists(self.hparam.emb_file):
+            print 'del ', self.hparam.emb_file
+            os.remove(self.hparam.emb_file)
+
+        rng = np.random.RandomState(100)
+        rand_values = rng.normal(0.0, 0.01, (self.vocab_len, self.hparam.emb_size))
+        id2word = {y:x for x,y in self.vocab_map.iteritems()}
+        print 'load word2ver'
+        if self.hparam.word2vec_type == 'google':
+          word2vec = self.load_word_voctor_from_google_news()
+          print 'init matrix'
+          rand_values = self.init_word2vec_with_google_embeding(rand_values, id2word, word2vec)
+        else :
+          word2vec = self.load_word_voctor_from_glove()
+          print 'init matrix'
+          rand_values = self.init_wordd2vec_with_glove_embding(rand_values, id2word, word2vec)
+
+        pickle_out = open(self.hparam.emb_file,"wb")
+        pickle.dump(rand_values, pickle_out)
+        pickle_out.close()
+        return rand_values
+
+    def load_emb_pickle(self):
+        pickle_in = open(self.hparam.emb_file,"rb")
+        word_emb = pickle.load(pickle_in)
+        pickle_in.close()
+        print 'load emb sucess'
+        return word_emb
+
     def load_word_voctor_from_google_news(self):
-        word2vec = gensim.models.KeyedVectors.load_word2vec_format(self.hparam.word2vec, binary=True) 
+        word2vec = gensim.models.KeyedVectors.load_word2vec_format(self.hparam.google_word2vec, binary=True) 
+        print 'load google word2vec sucess'
         return word2vec
 
     def load_word_voctor_from_glove(self):
         word2vec = {}
         
-        print "==> loading word2vec"
-        f = open(self.hparam.word2vec, 'r')
+        print "==> loading glove"
+        f = open(self.hparam.glove_word2vec, 'r')
 
         for line in f:
             l = line.split()
             word2vec[l[0]] = map(float, l[1:])
-
-        print "==> word2vec is loaded"
+        print 'len: ',len(word2vec)
+        print "==> glove is loaded"
+        return word2vec
         
 
     def init_wordd2vec_with_glove_embding(self, rand_values, ivocab, word2vec):
